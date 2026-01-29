@@ -1,0 +1,202 @@
+-- ts file was generated at discord.gg/25ms & Remade GUI by Gemini
+-- Clean up old connections
+if _G.a then
+    local v1, v2, v3 = pairs(_G.a)
+    while true do
+        local v4
+        v3, v4 = v1(v2, v3)
+        if v3 == nil then break end
+        v4:Disconnect()
+    end
+    _G.a = nil
+end
+
+repeat task.wait() until game.Players.LocalPlayer
+
+-- Variables
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+local Character = nil
+local Humanoid = nil
+local RootPart = nil
+local IsInvisible = false
+local BodyParts = {}
+
+-- GUI Variables
+local StatusButton = nil 
+
+-- Function to setup character parts
+local function SetupCharacter()
+    Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    Humanoid = Character:WaitForChild('Humanoid')
+    RootPart = Character:WaitForChild('HumanoidRootPart')
+    BodyParts = {}
+
+    -- Get all visible parts to make them transparent locally (Ghost mode visual)
+    for _, part in pairs(Character:GetDescendants()) do
+        if part:IsA('BasePart') and part.Transparency == 0 then
+            table.insert(BodyParts, part)
+        end
+    end
+end
+
+-- Core Toggle Function (Handles Visuals + Logic)
+local function ToggleInvisible()
+    IsInvisible = not IsInvisible
+
+    -- Visual feedback on Character (Ghost effect)
+    for _, part in pairs(BodyParts) do
+        if part then
+            part.Transparency = IsInvisible and 0.5 or 0
+        end
+    end
+
+    -- Update GUI Button Status
+    if StatusButton then
+        if IsInvisible then
+            StatusButton.Text = "Invisible: ON"
+            StatusButton.BackgroundColor3 = Color3.fromRGB(85, 255, 127) -- Green
+            StatusButton.TextColor3 = Color3.fromRGB(0, 0, 0)
+        else
+            StatusButton.Text = "Invisible: OFF"
+            StatusButton.BackgroundColor3 = Color3.fromRGB(255, 85, 85) -- Red
+            StatusButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        end
+    end
+end
+
+-- GUI Setup Function
+local function CreateGUI()
+    -- Check if GUI already exists and destroy it to prevent duplicates
+    if LocalPlayer.PlayerGui:FindFirstChild("InvisibleGUI") then
+        LocalPlayer.PlayerGui.InvisibleGUI:Destroy()
+    end
+
+    local ScreenGui = Instance.new('ScreenGui')
+    ScreenGui.Name = "InvisibleGUI"
+    ScreenGui.ResetOnSpawn = false -- Keep GUI when respawning
+    
+    StatusButton = Instance.new('TextButton')
+    local UICorner = Instance.new("UICorner")
+    local UIStroke = Instance.new("UIStroke")
+
+    -- Button Styling
+    StatusButton.Name = "ToggleButton"
+    StatusButton.Size = UDim2.new(0, 140, 0, 50) -- Slightly wider for text
+    StatusButton.Position = UDim2.new(0.5, -70, 0.15, 0) -- Centered top
+    StatusButton.Text = 'Invisible: OFF'
+    StatusButton.Font = Enum.Font.GothamBold
+    StatusButton.TextSize = 16
+    StatusButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    StatusButton.BackgroundColor3 = Color3.fromRGB(255, 85, 85) -- Start Red
+    StatusButton.Parent = ScreenGui
+
+    -- Rounded Corners
+    UICorner.CornerRadius = UDim.new(0, 10)
+    UICorner.Parent = StatusButton
+
+    -- Border
+    UIStroke.Thickness = 2
+    UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    UIStroke.Color = Color3.fromRGB(255, 255, 255)
+    UIStroke.Transparency = 0.5
+    UIStroke.Parent = StatusButton
+
+    ScreenGui.Parent = LocalPlayer:WaitForChild('PlayerGui')
+
+    -- Drag Logic (Universal for Mobile/PC)
+    local dragging = false
+    local dragInput, dragStart, startPos
+
+    StatusButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = StatusButton.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    StatusButton.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            StatusButton.Position = UDim2.new(
+                startPos.X.Scale, 
+                startPos.X.Offset + delta.X, 
+                startPos.Y.Scale, 
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    -- Click Event
+    StatusButton.MouseButton1Click:Connect(function()
+        ToggleInvisible()
+    end)
+end
+
+-- Initialize
+SetupCharacter()
+CreateGUI()
+
+-- Connections Storage
+local connections = {nil, nil}
+
+-- Keybind Listener (PC)
+connections[1] = LocalPlayer:GetMouse().KeyDown:Connect(function(key)
+    if key == 'g' then
+        ToggleInvisible()
+    end
+end)
+
+-- Heartbeat Logic (The Invisible Mechanism)
+connections[2] = RunService.Heartbeat:Connect(function()
+    if IsInvisible and RootPart and Humanoid then
+        local currentCFrame = RootPart.CFrame
+        local originalCamOffset = Humanoid.CameraOffset
+        
+        -- Teleport far down
+        local newCFrame = currentCFrame * CFrame.new(0, -1000000, 0)
+        
+        -- Calculate offset to keep camera looking normal
+        local offsetPosition = newCFrame:ToObjectSpace(CFrame.new(currentCFrame.Position)).Position
+
+        RootPart.CFrame = newCFrame
+        Humanoid.CameraOffset = offsetPosition
+
+        RunService.RenderStepped:Wait()
+
+        -- Reset for the frame render (client visual trick)
+        RootPart.CFrame = currentCFrame
+        Humanoid.CameraOffset = originalCamOffset
+    end
+end)
+
+-- Handle Respawn
+LocalPlayer.CharacterAdded:Connect(function()
+    IsInvisible = false
+    -- Reset GUI status if it exists
+    if StatusButton then
+        StatusButton.Text = "Invisible: OFF"
+        StatusButton.BackgroundColor3 = Color3.fromRGB(255, 85, 85)
+        StatusButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end
+    SetupCharacter()
+end)
+
+-- Save connections to _G for cleanup later
+_G.a = connections
